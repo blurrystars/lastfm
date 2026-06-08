@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Now Playing</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+    </style>
+</head>
+<body class="bg-[#0a0a0a] text-white p-8 select-none">
+
+    <div id="music-card" class="max-w-xs flex flex-col gap-3">
+        
+        <div class="flex items-start gap-4">
+            <a id="user-url" href="#" target="_blank" class="block shrink-0">
+                <img id="album-art" src="https://via.placeholder.com/300/1a1a1a/ffffff?text=+" alt="Album Art" class="w-20 h-20 bg-[#1a1a1a] object-cover rounded shadow-sm hover:opacity-80 transition-opacity">
+            </a>
+            
+            <div class="flex-1 min-w-0 flex flex-col">
+                <a id="track-url" href="#" target="_blank" class="block font-bold text-[16px] tracking-tight text-white hover:underline truncate leading-tight">
+                    <span id="track-name">Loading</span>
+                </a>
+                
+                <a id="artist-url" href="#" target="_blank" class="block hover:underline truncate mt-0.5">
+                    <p id="artist-name" class="text-[#a0a0a5] font-bold text-[14px] tracking-tight truncate">Artist</p>
+                </a>
+                
+                <a id="album-url" href="#" target="_blank" class="block hover:underline truncate mt-1">
+                    <p id="album-name" class="text-[#6e6e73] font-bold text-[12px] tracking-tight truncate">Album</p>
+                </a>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 mt-1">
+            <span id="status-dot" class="h-1.5 w-1.5 rounded-full bg-[#3a3a3c]"></span>
+            <span id="status-text" class="text-[11px] font-bold tracking-tight text-[#86868b] uppercase">Connecting</span>
+        </div>
+
+    </div>
+
+    <script>
+        const API_KEY = 'd21f900aea647ddfacccbb7179261cb6'; 
+        const USERNAME = 'sicmr';
+
+        function formatPlaybackTime(utsSeconds) {
+            if (!utsSeconds) return "Recently";
+            
+            const itemDate = new Date(utsSeconds * 1000);
+            const today = new Date();
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            const timeOptions = { hour: 'numeric', minute: '2-digit', hour12: true };
+            const localTimeStr = itemDate.toLocaleTimeString(undefined, timeOptions);
+
+            if (itemDate.toDateString() === today.toDateString()) {
+                return `Last played today at ${localTimeStr}`;
+            } else if (itemDate.toDateString() === yesterday.toDateString()) {
+                return `Last played yesterday at ${localTimeStr}`;
+            } else {
+                const dateOptions = { month: 'short', day: 'numeric' };
+                return `Last played ${itemDate.toLocaleDateString(undefined, dateOptions)} at ${localTimeStr}`;
+            }
+        }
+
+        window.handleLastFMResponse = function(data) {
+            if (data.error) {
+                document.getElementById('status-text').textContent = "API Error";
+                document.getElementById('status-dot').className = "h-1.5 w-1.5 rounded-full bg-[#3a3a3c]";
+                return;
+            }
+
+            try {
+                const track = data.recenttracks.track[0];
+                if (!track) return;
+
+                const statusDot = document.getElementById('status-dot');
+                const statusText = document.getElementById('status-text');
+                const albumArt = document.getElementById('album-art');
+                const trackName = document.getElementById('track-name');
+                const artistName = document.getElementById('artist-name');
+                const albumName = document.getElementById('album-name');
+                
+                const userUrl = document.getElementById('user-url');
+                const trackUrl = document.getElementById('track-url');
+                const artistUrl = document.getElementById('artist-url');
+                const albumUrl = document.getElementById('album-url');
+
+                const isPlaying = track['@attr'] && track['@attr'].nowplaying === 'true';
+
+                if (isPlaying) {
+                    statusDot.className = "h-1.5 w-1.5 rounded-full bg-white";
+                    statusText.textContent = "Now Playing";
+                    statusText.className = "text-[11px] font-bold tracking-tight text-white uppercase";
+                } else {
+                    statusDot.className = "h-1.5 w-1.5 rounded-full bg-[#3a3a3c]";
+                    statusText.textContent = formatPlaybackTime(track.date ? track.date.uts : null);
+                    statusText.className = "text-[11px] font-bold tracking-tight text-[#86868b] uppercase";
+                }
+
+                trackName.textContent = track.name;
+                artistName.textContent = track.artist['#text'];
+                albumName.textContent = track.album['#text'] || 'Single';
+                
+                userUrl.href = `https://www.last.fm/user/${USERNAME}`;
+                trackUrl.href = track.url;
+                
+                const encodedArtist = encodeURIComponent(track.artist['#text']);
+                artistUrl.href = `https://www.last.fm/music/${encodedArtist}`;
+                
+                if (track.album['#text']) {
+                    const encodedAlbum = encodeURIComponent(track.album['#text']);
+                    albumUrl.href = `https://www.last.fm/music/${encodedArtist}/${encodedAlbum}`;
+                } else {
+                    albumUrl.href = `https://www.last.fm/music/${encodedArtist}`;
+                }
+
+                if (track.image && track.image[3] && track.image[3]['#text']) {
+                    albumArt.src = track.image[3]['#text'];
+                } else {
+                    albumArt.src = 'https://via.placeholder.com/300/1a1a1a/ffffff?text=';
+                }
+
+            } catch (error) {
+                console.error("Layout failure:", error);
+            }
+        };
+
+        function fetchNowPlaying() {
+            const oldScript = document.getElementById('lastfm-jsonp');
+            if (oldScript) oldScript.remove();
+
+            const script = document.createElement('script');
+            script.id = 'lastfm-jsonp';
+            script.src = `https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${USERNAME}&api_key=${API_KEY}&format=json&limit=1&callback=handleLastFMResponse&_ts=${Date.now()}`;
+            
+            script.onerror = function() {
+                document.getElementById('status-text').textContent = "Offline";
+                document.getElementById('status-dot').className = "h-1.5 w-1.5 rounded-full bg-[#3a3a3c]";
+            };
+
+            document.body.appendChild(script);
+        }
+
+        fetchNowPlaying();
+        setInterval(fetchNowPlaying, 15000);
+    </script>
+</body>
+</html>
